@@ -1,0 +1,24 @@
+{
+  "name": "plan2render",
+  "version": "1.0.0",
+  "description": "Convert 2D AutoCAD DXF files into 3D interior layouts with interactive editor",
+  "private": true,
+  "workspaces": [
+    "frontend",
+    "backend",
+    "worker",
+    "processing"
+  ],
+  "scripts": {
+    "install-all": "npm install --workspaces",
+    "dev": "npm run dev --workspaces",
+    "build": "npm run build --workspaces",
+    "start-frontend": "cd frontend && npm run dev",
+    "start-backend": "cd backend && npm run dev",
+    "start-worker": "cd worker && npm run dev",
+    "start-all": "concurrently \"npm run start-frontend\" \"npm run start-backend\" \"npm run start-worker\""
+  },
+  "devDependencies": {
+    "concurrently": "^8.0.0"
+  }
+}
