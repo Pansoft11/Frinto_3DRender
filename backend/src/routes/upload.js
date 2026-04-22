@@ -3,8 +3,8 @@
  */
 import express from 'express'
 import { Queue } from 'bullmq'
-import redis from 'redis'
 import { query } from '../db/db.js'
+import { redisConnection } from '../config/redis.js'
 import upload from '../middleware/upload.js'
 import path from 'path'
 import { fileURLToPath } from 'url'
@@ -13,17 +13,9 @@ const router = express.Router()
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
-// Redis connection
-const redisClient = redis.createClient({
-  url: process.env.REDIS_URL || 'redis://localhost:6379'
-})
-
-redisClient.on('error', (err) => console.log('Redis client error', err))
-await redisClient.connect()
-
-// Create BullMQ queue
-const processingQueue = new Queue('dxf-processing', {
-  connection: redisClient
+// Queue name is shared with the worker.
+const processingQueue = new Queue('cad-processing', {
+  connection: redisConnection
 })
 
 /**
@@ -88,6 +80,7 @@ router.post('/', upload.single('file'), async (req, res) => {
 
     res.status(201).json({
       file: fileRecord,
+      jobId: job.id,
       job: {
         id: job.id,
         status: 'pending',

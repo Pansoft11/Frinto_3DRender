@@ -70,11 +70,11 @@ def process_dxf(input_path, output_dir, project_id):
         
         print(f"💾 Exporting GLTF and layout...", flush=True)
         
-        # Step 8a: Export GLTF
-        gltf_path = output_dir / f"{project_id}.glb"
+        # Step 8a: Export GLTF with a stable filename for web loading.
+        gltf_path = output_dir / "output.gltf"
         export_gltf(mesh, str(gltf_path))
         
-        # Step 8b: Export layout as JSON
+        # Step 8b: Export layout as JSON with a stable filename.
         layout_data = {
             "projectId": project_id,
             "rooms": classified_rooms,
@@ -86,7 +86,7 @@ def process_dxf(input_path, output_dir, project_id):
             }
         }
         
-        layout_path = output_dir / f"{project_id}_layout.json"
+        layout_path = output_dir / "layout.json"
         with open(layout_path, 'w') as f:
             json.dump(layout_data, f, indent=2)
         

@@ -4,7 +4,7 @@ import { fileURLToPath } from 'url'
 import fs from 'fs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const uploadDir = path.join(__dirname, '../../uploads')
+const uploadDir = path.resolve(process.env.UPLOAD_DIR || path.join(__dirname, '../../uploads'))
 
 // Ensure upload directory exists
 if (!fs.existsSync(uploadDir)) {

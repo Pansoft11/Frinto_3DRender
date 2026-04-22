@@ -52,37 +52,28 @@ function GeometryFactory({ type, scale, color }) {
  * Editable 3D object with transform controls
  */
 function EditableObject({ obj, isSelected, onSelect, transformRef, transformMode }) {
-  const meshRef = useRef()
+  const objectRef = useRef()
   const [hovered, setHovered] = useState(false)
-  const outlineRef = useRef()
+  const [, setTransformTargetReady] = useState(0)
 
-  // Update mesh position/rotation/scale from store
+  // Keep the Three.js object synchronized with Zustand state.
   useEffect(() => {
-    if (meshRef.current) {
-      meshRef.current.position.set(...obj.position)
-      meshRef.current.rotation.set(...obj.rotation)
-      meshRef.current.scale.set(...obj.scale)
+    if (objectRef.current) {
+      objectRef.current.position.set(...obj.position)
+      objectRef.current.rotation.set(...obj.rotation)
+      objectRef.current.scale.set(...obj.scale)
     }
   }, [obj])
 
-  // Edge outline for selection
   useEffect(() => {
-    if (outlineRef.current && isSelected) {
-      // Update outline to match mesh
-      if (meshRef.current) {
-        outlineRef.current.position.copy(meshRef.current.position)
-        outlineRef.current.rotation.copy(meshRef.current.rotation)
-        outlineRef.current.scale.copy(meshRef.current.scale)
-      }
-    }
-  }, [isSelected, obj])
+    setTransformTargetReady((value) => value + 1)
+  }, [])
 
   const material = getModelMaterial(obj.type, obj.color)
   const fallbackType = getFallbackGeometry(obj.type)
 
-  return (
-    <group ref={meshRef}>
-      {/* Main object */}
+  const objectMesh = (
+    <group ref={objectRef} position={obj.position} rotation={obj.rotation} scale={obj.scale}>
       <mesh
         onClick={(e) => {
           e.stopPropagation()
@@ -125,10 +116,10 @@ function EditableObject({ obj, isSelected, onSelect, transformRef, transformMode
         )}
       </mesh>
 
-      {/* Selection highlight - thick outline */}
+      {/* Selection highlight keeps object picking clear without changing geometry. */}
       {isSelected && (
-        <lineSegments ref={outlineRef}>
-          <edgeGeometry
+        <lineSegments>
+          <edgesGeometry
             attach="geometry"
             args={[
               fallbackType === 'cylinder'
@@ -147,35 +138,36 @@ function EditableObject({ obj, isSelected, onSelect, transformRef, transformMode
           />
         </lineSegments>
       )}
+    </group>
+  )
 
-      {/* Transform control gizmo for selected object */}
-      {isSelected && (
+  return (
+    <>
+      {objectMesh}
+      {isSelected && objectRef.current && (
         <TransformControls
           ref={transformRef}
+          object={objectRef.current}
           mode={transformMode}
+          showX
+          showY={transformMode !== 'translate'}
+          showZ
           onObjectChange={() => {
-            if (meshRef.current) {
-              const { x, y, z } = meshRef.current.position
-              const eulerRot = new THREE.Euler().setFromQuaternion(
-                meshRef.current.quaternion
-              )
-              const { x: sx, y: sy, z: sz } = meshRef.current.scale
+            if (objectRef.current) {
+              const { x, y, z } = objectRef.current.position
+              const { x: rx, y: ry, z: rz } = objectRef.current.rotation
+              const { x: sx, y: sy, z: sz } = objectRef.current.scale
 
               useEditorStore.getState().updateObject(obj.id, {
-                position: [x, Math.max(0, y), z], // Clamp Y to ground
-                rotation: [eulerRot.x, eulerRot.y, eulerRot.z],
+                position: [x, Math.max(0, y), z],
+                rotation: [rx, ry, rz],
                 scale: [sx, sy, sz]
               })
             }
           }}
-        >
-          <mesh position={[0, 0, 0]}>
-            <boxGeometry args={[1.05, 1.05, 1.05]} />
-            <meshBasicMaterial transparent opacity={0} />
-          </mesh>
-        </TransformControls>
+        />
       )}
-    </group>
+    </>
   )
 }
 

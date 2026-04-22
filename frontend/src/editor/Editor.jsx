@@ -57,10 +57,10 @@ export default function Editor() {
       setSaving(true)
       const payload = exportSceneJSON(objects, null)
 
-      const response = await fetch(`/api/layout/${projectId}`, {
+      const response = await fetch('/save-layout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        body: JSON.stringify({ projectId, layout: payload })
       })
 
       if (response.ok) {
@@ -77,7 +77,7 @@ export default function Editor() {
 
   const loadLayout = async () => {
     try {
-      const response = await fetch(`/api/layout/${projectId}`)
+      const response = await fetch(`/layout/${projectId}`)
       if (response.ok) {
         const data = await response.json()
         const loadedObjects = importSceneJSON(data)

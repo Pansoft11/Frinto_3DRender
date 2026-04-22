@@ -1,6 +1,6 @@
 import 'dotenv/config'
-import { Worker, Queue } from 'bullmq'
-import redis from 'redis'
+import { Worker } from 'bullmq'
+import IORedis from 'ioredis'
 import pkg from 'pg'
 import { spawn } from 'child_process'
 import path from 'path'
@@ -9,12 +9,18 @@ import { fileURLToPath } from 'url'
 const { Pool } = pkg
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
-// Redis connection
-const redisConnection = redis.createClient({
-  url: process.env.REDIS_URL || 'redis://localhost:6379'
-})
+// Worker uses ioredis directly so BullMQ has a single Redis client type.
+const redisConnection = process.env.REDIS_URL
+  ? new IORedis(process.env.REDIS_URL, { maxRetriesPerRequest: null })
+  : new IORedis({
+      host: '127.0.0.1',
+      port: 6379,
+      maxRetriesPerRequest: null
+    })
 
-await redisConnection.connect()
+redisConnection.on('error', (error) => {
+  console.error('Redis connection error:', error)
+})
 
 // PostgreSQL connection
 const pool = new Pool({
@@ -26,47 +32,42 @@ const query = async (text, params) => {
 }
 
 /**
- * Process DXF file job
+ * Process a CAD upload job and persist the result back to the jobs table.
  */
 async function processDXF(job) {
   try {
     const { projectId, fileId, filePath, originalName } = job.data
 
-    console.log(`🔄 Processing DXF: ${originalName}`)
+    console.log(`Processing CAD file: ${originalName || filePath}`)
 
-    // Update job status
     await query(
       'UPDATE jobs SET status = $1, started_at = CURRENT_TIMESTAMP WHERE job_id = $2',
       ['processing', job.id]
     )
 
-    // Call Python processing script
     const result = await processDXFWithPython(filePath, projectId, fileId)
 
-    // Update job with results
     await query(
-      `UPDATE jobs 
-       SET status = $1, 
-           result = $2, 
-           completed_at = CURRENT_TIMESTAMP, 
+      `UPDATE jobs
+       SET status = $1,
+           result = $2,
+           completed_at = CURRENT_TIMESTAMP,
            progress = 100
        WHERE job_id = $3`,
       ['completed', JSON.stringify(result), job.id]
     )
 
-    // Update job progress
-    job.progress(100)
+    await job.updateProgress(100)
 
-    console.log(`✅ Processing completed for ${originalName}`)
+    console.log(`Processing completed for ${originalName || filePath}`)
     return result
   } catch (error) {
-    console.error(`❌ Processing failed: ${error.message}`)
+    console.error(`Processing failed for job ${job.id}:`, error)
 
-    // Update job with error
     await query(
-      `UPDATE jobs 
-       SET status = $1, 
-           error_message = $2, 
+      `UPDATE jobs
+       SET status = $1,
+           error_message = $2,
            completed_at = CURRENT_TIMESTAMP
        WHERE job_id = $3`,
       ['failed', error.message, job.id]
@@ -77,42 +78,46 @@ async function processDXF(job) {
 }
 
 /**
- * Call Python script to process DXF
+ * Execute the Python processing wrapper expected by the queue contract:
+ * python processing/process.py <filePath>
  */
 function processDXFWithPython(filePath, projectId, fileId) {
   return new Promise((resolve, reject) => {
-    const pythonScript = path.join(__dirname, '../../processing/main.py')
-    const outputDir = path.join(__dirname, '../../outputs')
+    const pythonScript = path.join(__dirname, '../../processing/process.py')
+    const outputDir = path.resolve(process.env.OUTPUT_DIR || path.join(__dirname, '../../backend/outputs'))
     const pythonBinary = process.env.PYTHON_PATH || 'python'
 
-    const python = spawn(pythonBinary, [
-      pythonScript,
-      '--input', filePath,
-      '--output', outputDir,
-      '--project-id', projectId
-    ])
+    console.log(`Starting Python processing: ${pythonBinary} ${pythonScript} ${filePath}`)
+
+    const python = spawn(pythonBinary, [pythonScript, filePath], {
+      env: {
+        ...process.env,
+        OUTPUT_DIR: outputDir,
+        PROJECT_ID: projectId,
+        FILE_ID: fileId
+      }
+    })
 
     let output = ''
     let errorOutput = ''
 
     python.stdout.on('data', (data) => {
       output += data.toString()
-      console.log(`[Python] ${data}`)
+      console.log(`[Python] ${data.toString().trimEnd()}`)
     })
 
     python.stderr.on('data', (data) => {
       errorOutput += data.toString()
-      console.error(`[Python Error] ${data}`)
+      console.error(`[Python Error] ${data.toString().trimEnd()}`)
     })
 
     python.on('close', (code) => {
       if (code === 0) {
         try {
-          // Parse Python output (should be JSON)
           const result = JSON.parse(output.trim().split('\n').pop())
           resolve(result)
         } catch (err) {
-          reject(new Error(`Failed to parse Python output: ${err.message}`))
+          reject(new Error(`Failed to parse Python output: ${err.message}. Output: ${output}`))
         }
       } else {
         reject(new Error(`Python script failed with code ${code}: ${errorOutput}`))
@@ -120,16 +125,16 @@ function processDXFWithPython(filePath, projectId, fileId) {
     })
 
     python.on('error', (err) => {
-      reject(err)
+      reject(new Error(`Failed to start Python process: ${err.message}`))
     })
   })
 }
 
 /**
- * Create and start worker
+ * Create and start worker on the shared BullMQ queue.
  */
 function startWorker() {
-  const worker = new Worker('dxf-processing', processDXF, {
+  const worker = new Worker('cad-processing', processDXF, {
     connection: redisConnection,
     concurrency: 2,
     settings: {
@@ -139,28 +144,26 @@ function startWorker() {
   })
 
   worker.on('completed', (job) => {
-    console.log(`✅ Job ${job.id} completed`)
+    console.log(`Job ${job.id} completed`)
   })
 
   worker.on('failed', (job, err) => {
-    console.error(`❌ Job ${job.id} failed:`, err.message)
+    console.error(`Job ${job?.id || 'unknown'} failed:`, err.message)
   })
 
   worker.on('error', (err) => {
     console.error('Worker error:', err)
   })
 
-  console.log('🚀 Worker started, waiting for jobs...')
+  console.log('Worker started on queue cad-processing, waiting for jobs...')
 
-  // Graceful shutdown
   process.on('SIGTERM', async () => {
     console.log('Shutting down worker...')
     await worker.close()
-    await redisConnection.quit()
+    redisConnection.disconnect()
     await pool.end()
     process.exit(0)
   })
 }
 
-// Start worker
 startWorker()

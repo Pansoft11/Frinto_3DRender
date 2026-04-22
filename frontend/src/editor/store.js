@@ -129,7 +129,8 @@ export const useEditorStore = create((set, get) => {
 
     // Batch operations
     setObjects: (objects) => set((state) => {
-      const newState = { objects }
+      // Loading a layout rebuilds scene objects and clears stale selections.
+      const newState = { objects, selected: null }
       saveToHistory(newState)
       return newState
     }),
