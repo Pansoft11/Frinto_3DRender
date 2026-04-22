@@ -41,6 +41,11 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() })
 })
 
+// Root check route for Render/browser smoke tests.
+app.get('/', (req, res) => {
+  res.send('Plan2Render Backend Running')
+})
+
 // API Routes (public)
 app.use('/api/auth', authRoutes)
 
