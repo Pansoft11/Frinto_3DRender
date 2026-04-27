@@ -45,3 +45,17 @@ code {
 .scene-loading {
   color: #94a3b8;
 }
+
+.app-error pre {
+  max-width: min(720px, calc(100vw - 48px));
+  margin: 4px auto;
+  padding: 12px;
+  overflow: auto;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  background: #020617;
+  color: #fca5a5;
+  font-family: ui-monospace, SFMono-Regular, Consolas, 'Liberation Mono', monospace;
+  font-size: 13px;
+  white-space: pre-wrap;
+}

@@ -22,6 +22,7 @@ class ErrorBoundary extends Component {
       return (
         <div className="app-error">
           <h1>Error loading app</h1>
+          <pre>{this.state.error.message}</pre>
           <p>Open the browser console for details.</p>
         </div>
       )
