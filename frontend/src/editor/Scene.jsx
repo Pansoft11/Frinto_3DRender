@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo } from 'react'
+import { Suspense, useState, useRef, useEffect, useMemo } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
 import {
   OrbitControls,
@@ -335,56 +335,58 @@ export default function Scene() {
         overflow: 'hidden'
       }}
     >
-      <Canvas
-        ref={canvasRef}
-        camera={{
-          position: camera.position,
-          fov: 50,
-          near: 0.1,
-          far: 1000
-        }}
-        shadows="variance"
-        onClick={handleEmptyClick}
-      >
-        {/* Lighting */}
-        <Lighting />
+      <Suspense fallback={<div className="scene-loading">Loading...</div>}>
+        <Canvas
+          ref={canvasRef}
+          camera={{
+            position: camera.position,
+            fov: 50,
+            near: 0.1,
+            far: 1000
+          }}
+          shadows="variance"
+          onClick={handleEmptyClick}
+        >
+          {/* Lighting */}
+          <Lighting />
 
-        {/* Grid and reference */}
-        <FloorGrid />
+          {/* Grid and reference */}
+          <FloorGrid />
 
-        {/* Base model (room/floor plan) */}
-        {baseModel && <BaseModel gltf={baseModel} />}
+          {/* Base model (room/floor plan) */}
+          {baseModel && <BaseModel gltf={baseModel} />}
 
-        {/* Editable objects */}
-        {objects.map((obj) => (
-          <EditableObject
-            key={obj.id}
-            obj={obj}
-            isSelected={selected?.id === obj.id}
-            onSelect={handleSelectObject}
-            transformRef={selected?.id === obj.id ? transformRef : null}
-            transformMode={transformMode}
+          {/* Editable objects */}
+          {objects.map((obj) => (
+            <EditableObject
+              key={obj.id}
+              obj={obj}
+              isSelected={selected?.id === obj.id}
+              onSelect={handleSelectObject}
+              transformRef={selected?.id === obj.id ? transformRef : null}
+              transformMode={transformMode}
+            />
+          ))}
+
+          {/* Orbit controls - main navigation */}
+          <OrbitControls
+            ref={orbitRef}
+            makeDefault
+            minDistance={2}
+            maxDistance={100}
+            enablePan={true}
+            enableRotate={true}
+            enableZoom={true}
+            autoRotate={false}
+            zoomSpeed={1.2}
           />
-        ))}
 
-        {/* Orbit controls - main navigation */}
-        <OrbitControls
-          ref={orbitRef}
-          makeDefault
-          minDistance={2}
-          maxDistance={100}
-          enablePan={true}
-          enableRotate={true}
-          enableZoom={true}
-          autoRotate={false}
-          zoomSpeed={1.2}
-        />
-
-        {/* Gizmo helper - corner orientation */}
-        <GizmoHelper alignment="bottom-right" margin={[80, 80]}>
-          <GizmoViewport axisHeadScale={1.1} />
-        </GizmoHelper>
-      </Canvas>
+          {/* Gizmo helper - corner orientation */}
+          <GizmoHelper alignment="bottom-right" margin={[80, 80]}>
+            <GizmoViewport axisHeadScale={1.1} />
+          </GizmoHelper>
+        </Canvas>
+      </Suspense>
 
       {/* Scene debug info overlay */}
       <div
@@ -434,4 +436,3 @@ export default function Scene() {
     </div>
   )
 }
-

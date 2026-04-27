@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useEditorStore, useProjectStore } from './store'
 import { exportSceneJSON, importSceneJSON } from './utils'
+import { apiFetch } from '../api'
 import Scene from './Scene'
 import FurnitureLibrary from './FurnitureLibrary'
 import ControlsPanel from './ControlsPanel'
@@ -57,7 +58,7 @@ export default function Editor() {
       setSaving(true)
       const payload = exportSceneJSON(objects, null)
 
-      const response = await fetch('/save-layout', {
+      const response = await apiFetch('/save-layout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ projectId, layout: payload })
@@ -77,7 +78,7 @@ export default function Editor() {
 
   const loadLayout = async () => {
     try {
-      const response = await fetch(`/layout/${projectId}`)
+      const response = await apiFetch(`/layout/${projectId}`)
       if (response.ok) {
         const data = await response.json()
         const loadedObjects = importSceneJSON(data)
@@ -93,7 +94,7 @@ export default function Editor() {
 
   const loadSuggestedLayout = async () => {
     try {
-      const response = await fetch(`/api/layout/${projectId}/suggested`)
+      const response = await apiFetch(`/api/layout/${projectId}/suggested`)
       if (!response.ok) {
         throw new Error('Failed to fetch suggested layout')
       }

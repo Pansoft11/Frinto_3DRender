@@ -23,3 +23,25 @@ body {
 code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New', monospace;
 }
+
+.app-error,
+.scene-loading {
+  min-height: 100%;
+  display: grid;
+  place-content: center;
+  gap: 8px;
+  padding: 24px;
+  text-align: center;
+  background: #0f172a;
+  color: #e2e8f0;
+}
+
+.app-error h1 {
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.app-error p,
+.scene-loading {
+  color: #94a3b8;
+}
