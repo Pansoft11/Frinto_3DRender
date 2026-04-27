@@ -1,4 +1,4 @@
-import { Suspense, useState, useRef, useEffect, useMemo } from 'react'
+import { Component, Suspense, useState, useRef, useEffect, useMemo } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
 import {
   OrbitControls,
@@ -6,12 +6,63 @@ import {
   Grid,
   GizmoHelper,
   GizmoViewport,
-  Environment,
-  PerspectiveCamera
 } from '@react-three/drei'
 import * as THREE from 'three'
 import { useEditorStore } from './store'
-import { getModelMaterial, getModelScale, getFallbackGeometry } from './models'
+import { getModelMaterial, getFallbackGeometry } from './models'
+
+function canCreateWebGLContext() {
+  try {
+    const canvas = document.createElement('canvas')
+    const context =
+      canvas.getContext('webgl2') ||
+      canvas.getContext('webgl') ||
+      canvas.getContext('experimental-webgl')
+
+    return Boolean(context)
+  } catch (error) {
+    console.warn('WebGL check failed:', error)
+    return false
+  }
+}
+
+function WebGLUnavailable({ error }) {
+  return (
+    <div className="webgl-fallback">
+      <div className="webgl-fallback-content">
+        <h2>3D preview needs WebGL</h2>
+        <p>
+          Chrome could not create a WebGL context. The editor panels still work, but the 3D
+          viewport needs hardware acceleration or WebGL enabled in Chrome.
+        </p>
+        {error?.message && <pre>{error.message}</pre>}
+      </div>
+    </div>
+  )
+}
+
+class CanvasErrorBoundary extends Component {
+  constructor(props) {
+    super(props)
+    this.state = { error: null }
+  }
+
+  static getDerivedStateFromError(error) {
+    return { error }
+  }
+
+  componentDidCatch(error, info) {
+    console.error('3D viewport crashed:', error, info)
+  }
+
+  render() {
+    if (this.state.error) {
+      return <WebGLUnavailable error={this.state.error} />
+    }
+
+    return this.props.children
+  }
+}
 
 /**
  * Geometry factory for fallback models
@@ -294,6 +345,7 @@ export default function Scene() {
   const canvasRef = useRef()
   const transformRef = useRef()
   const orbitRef = useRef()
+  const webglSupported = useMemo(() => canCreateWebGLContext(), [])
 
   const handleSelectObject = (obj) => {
     setSelected(obj)
@@ -335,58 +387,65 @@ export default function Scene() {
         overflow: 'hidden'
       }}
     >
-      <Suspense fallback={<div className="scene-loading">Loading...</div>}>
-        <Canvas
-          ref={canvasRef}
-          camera={{
-            position: camera.position,
-            fov: 50,
-            near: 0.1,
-            far: 1000
-          }}
-          shadows="variance"
-          onClick={handleEmptyClick}
-        >
-          {/* Lighting */}
-          <Lighting />
+      {webglSupported ? (
+        <CanvasErrorBoundary>
+          <Suspense fallback={<div className="scene-loading">Loading...</div>}>
+            <Canvas
+              ref={canvasRef}
+              fallback={<WebGLUnavailable />}
+              camera={{
+                position: camera.position,
+                fov: 50,
+                near: 0.1,
+                far: 1000
+              }}
+              shadows="variance"
+              onClick={handleEmptyClick}
+            >
+              {/* Lighting */}
+              <Lighting />
 
-          {/* Grid and reference */}
-          <FloorGrid />
+              {/* Grid and reference */}
+              <FloorGrid />
 
-          {/* Base model (room/floor plan) */}
-          {baseModel && <BaseModel gltf={baseModel} />}
+              {/* Base model (room/floor plan) */}
+              {baseModel && <BaseModel gltf={baseModel} />}
 
-          {/* Editable objects */}
-          {objects.map((obj) => (
-            <EditableObject
-              key={obj.id}
-              obj={obj}
-              isSelected={selected?.id === obj.id}
-              onSelect={handleSelectObject}
-              transformRef={selected?.id === obj.id ? transformRef : null}
-              transformMode={transformMode}
-            />
-          ))}
+              {/* Editable objects */}
+              {objects.map((obj) => (
+                <EditableObject
+                  key={obj.id}
+                  obj={obj}
+                  isSelected={selected?.id === obj.id}
+                  onSelect={handleSelectObject}
+                  transformRef={selected?.id === obj.id ? transformRef : null}
+                  transformMode={transformMode}
+                />
+              ))}
 
-          {/* Orbit controls - main navigation */}
-          <OrbitControls
-            ref={orbitRef}
-            makeDefault
-            minDistance={2}
-            maxDistance={100}
-            enablePan={true}
-            enableRotate={true}
-            enableZoom={true}
-            autoRotate={false}
-            zoomSpeed={1.2}
-          />
+              {/* Orbit controls - main navigation */}
+              <OrbitControls
+                ref={orbitRef}
+                makeDefault
+                minDistance={2}
+                maxDistance={100}
+                enablePan={true}
+                enableRotate={true}
+                enableZoom={true}
+                autoRotate={false}
+                zoomSpeed={1.2}
+              />
 
-          {/* Gizmo helper - corner orientation */}
-          <GizmoHelper alignment="bottom-right" margin={[80, 80]}>
-            <GizmoViewport axisHeadScale={1.1} />
-          </GizmoHelper>
-        </Canvas>
-      </Suspense>
+              {/* Gizmo helper - corner orientation */}
+              <GizmoHelper alignment="bottom-right" margin={[80, 80]}>
+                <GizmoViewport axisHeadScale={1.1} />
+              </GizmoHelper>
+            </Canvas>
+          </Suspense>
+        </CanvasErrorBoundary>
+      ) : (
+        <WebGLUnavailable />
+      )}
 
       {/* Scene debug info overlay */}
       <div
